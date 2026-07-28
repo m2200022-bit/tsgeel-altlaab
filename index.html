@@ -194,21 +194,51 @@
 </head>
 <body>
 <div id="root" class="app"></div>
-<script>
-/* ---------------- Storage helpers ---------------- */
-const SHARED = true; // all data below is shared across everyone using this app link
+<script type="module">
+/* ---------------- Firebase (Firestore) ---------------- */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  getFirestore, doc, getDoc, setDoc, deleteDoc,
+  collection, query, where, getDocs
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDSnafBEhlldWiBekq0U5Yd0SrgvcxOdGA",
+  authDomain: "tsgeel-cf4cc.firebaseapp.com",
+  projectId: "tsgeel-cf4cc",
+  storageBucket: "tsgeel-cf4cc.firebasestorage.app",
+  messagingSenderId: "870948866985",
+  appId: "1:870948866985:web:ad1426c778d0c5ee9ed2b8",
+  measurementId: "G-4NHX6S8EZD"
+};
+const fbApp = initializeApp(firebaseConfig);
+const db = getFirestore(fbApp);
+const COL = "app_data"; // every piece of app data (programs / users / each response) is one document in this collection
+
+/* ---------------- Storage helpers (Firestore-backed, same key/value interface as before) ---------------- */
+function safeDocId(key){ return key.replace(/\//g, "__"); } // Firestore doc IDs can't contain "/"
+
 async function sget(key, fallback){
   try{
-    const r = await window.storage.get(key, SHARED);
-    return r ? JSON.parse(r.value) : fallback;
-  }catch(e){ return fallback; }
+    const snap = await getDoc(doc(db, COL, safeDocId(key)));
+    return snap.exists() ? snap.data().value : fallback;
+  }catch(e){ console.error(e); return fallback; }
 }
 async function sset(key, value){
-  try{ await window.storage.set(key, JSON.stringify(value), SHARED); }catch(e){ console.error(e); }
+  try{ await setDoc(doc(db, COL, safeDocId(key)), { key, value }); }
+  catch(e){ console.error(e); }
 }
-async function sdel(key){ try{ await window.storage.delete(key, SHARED); }catch(e){} }
+async function sdel(key){
+  try{ await deleteDoc(doc(db, COL, safeDocId(key))); }catch(e){ console.error(e); }
+}
 async function slist(prefix){
-  try{ const r = await window.storage.list(prefix, SHARED); return r ? r.keys : []; }catch(e){ return []; }
+  try{
+    const q = query(collection(db, COL), where("key", ">=", prefix), where("key", "<", prefix + "\uf8ff"));
+    const snaps = await getDocs(q);
+    const keys = [];
+    snaps.forEach(s=> keys.push(s.data().key));
+    return keys;
+  }catch(e){ console.error(e); return []; }
 }
 
 const DEFAULT_FIELDS = {
