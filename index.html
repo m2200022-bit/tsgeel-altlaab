@@ -190,6 +190,55 @@
   .program-item.active{border-color:var(--teal);background:#eaf5f3;}
   .program-item .pname{font-family:'Cairo';font-weight:800;color:var(--navy);font-size:14.5px;}
   .icon-inline{font-size:15px;}
+  .icon-btn{background:none;border:1.5px solid var(--line);border-radius:8px;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;color:var(--navy-2);flex-shrink:0;}
+  .icon-btn:hover{background:#f1efe6;}
+  .program-row{
+    display:grid;grid-template-columns:1.4fr .9fr 1fr auto;gap:10px;align-items:center;
+    border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fff;
+  }
+  .program-row.active{border-color:var(--teal);background:#eaf5f3;}
+  @media(max-width:700px){.program-row{grid-template-columns:1fr;}}
+  .program-row .col-label{display:none;font-size:11px;color:var(--muted);font-weight:700;}
+  @media(max-width:700px){.program-row .col-label{display:block;}}
+  .program-row .pname{font-family:'Cairo';font-weight:800;color:var(--navy);font-size:14.5px;}
+  .program-row .pmeta{font-size:12.5px;color:var(--muted);}
+  .program-row .pactions{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;}
+  .row-header{display:grid;grid-template-columns:1.4fr .9fr 1fr auto;gap:10px;padding:0 14px;margin-bottom:6px;font-size:11.5px;color:var(--muted);font-weight:800;font-family:'Cairo';}
+  @media(max-width:700px){.row-header{display:none;}}
+  .logos-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .logos-row .seal{width:52px;height:52px;position:relative;}
+  .logos-row .seal .rm-logo{
+    position:absolute;top:-6px;left:-6px;width:18px;height:18px;border-radius:50%;background:var(--danger);
+    color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #fff;
+  }
+  .brand .logos-row{display:flex;}
+  .order-item{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    border:1px solid var(--line);border-radius:9px;padding:9px 12px;margin-bottom:8px;background:#fff;
+  }
+  .order-item .oi-info{font-size:13.5px;flex:1;}
+  .order-item .oi-info b{display:block;color:var(--navy-2);}
+  .order-item .oi-info span{color:var(--muted);font-size:12px;}
+  .order-btns{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;}
+  .popup-overlay{
+    position:fixed;inset:0;background:rgba(21,34,56,0.55);z-index:200;
+    display:flex;align-items:center;justify-content:center;padding:20px;
+  }
+  .popup-box{
+    background:var(--card);border-radius:16px;max-width:420px;width:100%;padding:28px 24px;text-align:center;
+    box-shadow:0 20px 50px -10px rgba(0,0,0,0.4);position:relative;
+  }
+  .popup-box .popup-x{
+    position:absolute;top:12px;left:12px;width:28px;height:28px;border-radius:50%;background:#f1efe6;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;color:var(--navy-2);
+  }
+  .popup-box p{color:var(--ink);font-size:15px;line-height:1.9;margin:10px 0 20px;white-space:pre-wrap;}
+  .org-name{font-size:12px;color:var(--teal-d);font-weight:800;margin-bottom:2px;}
+  .countdown-banner{
+    background:linear-gradient(90deg, var(--navy), var(--navy-2));color:#fff;text-align:center;
+    padding:11px 14px;border-radius:10px;font-weight:800;font-family:'Cairo';font-size:14px;
+    margin-bottom:16px;letter-spacing:.2px;border:1px solid var(--gold);
+  }
 </style>
 </head>
 <body>
@@ -247,28 +296,55 @@ const DEFAULT_FIELDS = {
 
 function newId(prefix){ return prefix + Date.now() + Math.random().toString(36).slice(2,7); }
 
+/* the fixed set of "block" keys every program's field order is built from (custom field ids get appended) */
+function defaultFieldOrder(){ return ['nationality','idNumber','birthdate','phones','disease']; }
+const ORDER_LABELS = {
+  nationality:"الجنسية", idNumber:"رقم البطاقة الشخصية", birthdate:"تاريخ الميلاد والعمر",
+  phones:"أرقام الجوال (الطالب / ولي الأمر)", disease:"سؤال الأمراض"
+};
+
 function defaultProgram(name){
   return {
     id: newId('p'),
     name: name || "برنامجنا التدريبي",
     description: "يرجى تعبئة النموذج أدناه لإتمام عملية التسجيل.",
-    logo: "",
+    orgName: "",
+    logos: [], // array of image data-URLs (can hold more than one logo)
     poster: "",
+    visibleToPublic: true,
     regStart: "",
     regEnd: "",
     thankYouMessage: "تم تسجيلكم بنجاح في برنامج {{program}}. شكرًا لكم!",
     fields: Object.assign({}, DEFAULT_FIELDS),
     customFields: [], // {id,label,type:'text'|'yesno'|'textarea'}
+    fieldOrder: defaultFieldOrder(),
     ageRestrict: false,
     ageFrom: "",
     ageTo: ""
   };
 }
 
-const ALL_PERMS = ['programs','schedule','fields','message','responses','users'];
+/* keeps older / partially-saved program objects valid after new features are added */
+function normalizeProgram(p){
+  if(!Array.isArray(p.logos)) p.logos = p.logo ? [p.logo] : [];
+  if(p.orgName === undefined) p.orgName = "";
+  if(p.visibleToPublic === undefined) p.visibleToPublic = true;
+  if(!p.customFields) p.customFields = [];
+  if(!p.fields) p.fields = Object.assign({}, DEFAULT_FIELDS);
+  const customIds = p.customFields.map(cf=>cf.id);
+  const standardKeys = defaultFieldOrder();
+  let order = Array.isArray(p.fieldOrder) ? p.fieldOrder.filter(k=> standardKeys.includes(k) || customIds.includes(k)) : [];
+  standardKeys.forEach(k=>{ if(!order.includes(k)) order.push(k); });
+  customIds.forEach(id=>{ if(!order.includes(id)) order.push(id); });
+  p.fieldOrder = order;
+  return p;
+}
+
+const ALL_PERMS = ['programs','schedule','fields','message','responses','users','announcement'];
 const PERM_LABELS = {
   programs:"إدارة البرامج/الصفوف", schedule:"مواعيد التسجيل", fields:"الأسئلة وعمر المشتركين",
-  message:"رسالة الشكر", responses:"عرض/تصدير الاستجابات", users:"إدارة المستخدمين"
+  message:"رسالة الشكر", responses:"عرض/تصدير الاستجابات", users:"إدارة المستخدمين",
+  announcement:"الرسالة المنبثقة للجمهور"
 };
 
 function defaultOwner(username, password){
@@ -278,21 +354,34 @@ function defaultOwner(username, password){
     password: password || "admin123",
     active: true,
     isOwner: true,
-    permissions: { programs:true, schedule:true, fields:true, message:true, responses:true, users:true }
+    permissions: { programs:true, schedule:true, fields:true, message:true, responses:true, users:true, announcement:true }
+  };
+}
+
+function defaultSite(){
+  return {
+    popupEnabled: false,
+    popupMessage: "",
+    popupButtonText: "متابعة",
+    popupLinkUrl: "",
+    lastBackupDate: "", // yyyy-mm-dd, used for the once-per-day auto backup
+    displayedProgramId: "" // which program shows on the public main screen
   };
 }
 
 let PROGRAMS = [];
 let USERS = [];
+let SITE = defaultSite();
 let CURRENT_USER = null;
 
 let VIEW = "loading"; // public | adminLogin | admin
-let ADMIN_TAB = "programs"; // programs|schedule|fields|message|responses|users
+let ADMIN_TAB = "programs"; // programs|schedule|fields|message|responses|users|announcement
 let ADMIN_PROGRAM_ID = null; // currently selected program inside admin panel
 let EDIT_PROGRAM_ID = null; // program being edited on the "programs" tab
 let SUBMITTED = false;
 let SAVING = false;
-let PUBLIC_PROGRAM_ID = null; // program chosen by the visitor on the public page
+let POPUP_DISMISSED = false; // session-only: hides the public announcement popup once closed
+let countdownTimer = null; // interval handle for the public "closes in..." countdown
 
 /* ---------------- Nationalities (Arabic) ---------------- */
 const NATIONALITIES = ["سعودي","إماراتي","كويتي","قطري","بحريني","عماني","يمني","عراقي","سوري","لبناني","أردني","فلسطيني","مصري","سوداني","ليبي","تونسي","جزائري","مغربي","موريتاني","صومالي","جيبوتي","قمري","تركي","إيراني","أفغاني","باكستاني","هندي","بنغلاديشي","سريلانكي","نيبالي","بوتاني","مالديفي","صيني","ياباني","كوري جنوبي","كوري شمالي","فلبيني","إندونيسي","ماليزي","سنغافوري","تايلاندي","فيتنامي","لاوسي","كمبودي","ميانماري","منغولي","كازاخستاني","أوزبكستاني","تركمانستاني","طاجيكستاني","قيرغيزستاني","أذربيجاني","أرمني","جورجي","روسي","أوكراني","بيلاروسي","مولدوفي","بولندي","تشيكي","سلوفاكي","مجري","روماني","بلغاري","صربي","كرواتي","بوسني","سلوفيني","مقدوني","ألباني","يوناني","قبرصي","مالطي","إيطالي","إسباني","برتغالي","فرنسي","ألماني","سويسري","نمساوي","بلجيكي","هولندي","لوكسمبورغي","بريطاني","إيرلندي","آيسلندي","دنماركي","سويدي","نرويجي","فنلندي","إستوني","لاتفي","ليتواني","أمريكي","كندي","مكسيكي","غواتيمالي","بليزي","هندوراسي","سلفادوري","نيكاراغوي","كوستاريكي","بنمي","كوبي","دومينيكي","هايتي","جامايكي","ترينيدادي","باهامي","بربادوسي","برازيلي","أرجنتيني","تشيلي","بيروفي","كولومبي","فنزويلي","إكوادوري","بوليفي","باراغواياني","أوروغواياني","غياني","سورينامي","جنوب أفريقي","نيجيري","إثيوبي","كيني","تنزاني","أوغندي","غاني","إيفواري","سنغالي","مالي","بوركينابي","نيجري","تشادي","كاميروني","أنغولي","موزمبيقي","زامبي","زيمبابوي","ناميبي","بوتسواني","رواندي","بوروندي","ملاوي","ليسوتو","إسواتيني","مدغشقري","موريشي","سيشيلي","غيني","غيني بيساوي","غيني استوائي","غابوني","كونغولي (برازافيل)","كونغولي (كينشاسا)","أفريقي وسطي","إريتري","جنوب سوداني","ليبيري","سيراليوني","غامبي","رأس أخضر","توغولي","بنيني","أسترالي","نيوزيلندي","فيجي","بابوا غيني الجديدة","ساموا","تونغا"].sort((a,b)=>a.localeCompare(b,'ar'));
@@ -301,6 +390,7 @@ const NATIONALITIES = ["سعودي","إماراتي","كويتي","قطري","ب
 async function init(){
   PROGRAMS = await sget('programs', null);
   USERS = await sget('users', null);
+  SITE = await sget('site-settings', null) || defaultSite();
 
   if(!PROGRAMS){
     // migrate from the old single-program config, if present
@@ -308,7 +398,7 @@ async function init(){
     if(old){
       const p = defaultProgram(old.programName);
       p.description = old.programDescription || p.description;
-      p.logo = old.logo || "";
+      p.logos = old.logo ? [old.logo] : [];
       p.regStart = old.regStart || "";
       p.regEnd = old.regEnd || "";
       p.thankYouMessage = old.thankYouMessage || p.thankYouMessage;
@@ -321,16 +411,37 @@ async function init(){
     }
     await sset('programs', PROGRAMS);
   }
+  PROGRAMS = PROGRAMS.map(normalizeProgram);
   if(!USERS){ USERS = [defaultOwner()]; await sset('users', USERS); }
 
   ADMIN_PROGRAM_ID = PROGRAMS[0] ? PROGRAMS[0].id : null;
-  if(PROGRAMS.length === 1) PUBLIC_PROGRAM_ID = PROGRAMS[0].id;
+  // if no program is pinned yet for the public page, default to the first enabled one
+  if(!SITE.displayedProgramId || !getProgram(SITE.displayedProgramId)){
+    const firstVisible = PROGRAMS.find(p=>p.visibleToPublic);
+    if(firstVisible){ SITE.displayedProgramId = firstVisible.id; await sset('site-settings', SITE); }
+  }
 
   VIEW = "public";
   render();
 }
 
 function getProgram(id){ return PROGRAMS.find(p=>p.id===id) || null; }
+
+/* ---------------- Once-per-day auto backup (client-side best effort) ----------------
+   There is no server/cron in a static page, so this triggers an Excel backup download
+   the first time an admin with access opens the control panel on a new calendar day. */
+async function maybeAutoBackup(){
+  const today = new Date().toISOString().slice(0,10);
+  if(SITE.lastBackupDate === today) return;
+  const keys = await slist('response:');
+  if(keys.length){
+    const results = await Promise.all(keys.map(k=> sget(k, null)));
+    const all = results.filter(Boolean);
+    exportBackupWorkbook(all, `نسخة_احتياطية_${today}.xlsx`);
+  }
+  SITE.lastBackupDate = today;
+  await sset('site-settings', SITE);
+}
 
 function esc(s){ return (s||"").toString().replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
@@ -351,7 +462,7 @@ function regStatus(program){
   const end = program.regEnd ? new Date(program.regEnd) : null;
   if(start && now < start) return {open:false, reason:"لم يبدأ التسجيل بعد", when: fmtDT(start)};
   if(end && now > end) return {open:false, reason:"انتهى وقت التسجيل", when: fmtDT(end)};
-  return {open:true};
+  return {open:true, closesAt: end ? fmtDT(end) : null};
 }
 
 /* birth-year age restriction check: returns true if allowed */
@@ -373,6 +484,7 @@ function fmtDT(d){
 /* ---------------- Render root ---------------- */
 function render(){
   const root = document.getElementById('root');
+  if(VIEW !== "public" && countdownTimer){ clearInterval(countdownTimer); countdownTimer = null; }
   if(VIEW === "loading"){ root.innerHTML = "<p style='text-align:center;padding:60px;color:#6b7686'>جارِ التحميل...</p>"; return; }
   if(VIEW === "adminLogin"){ root.innerHTML = renderAdminLogin(); attachAdminLoginEvents(); return; }
   if(VIEW === "admin"){ root.innerHTML = renderAdmin(); attachAdminEvents(); return; }
@@ -381,38 +493,35 @@ function render(){
 }
 
 /* ---------------- Public view ---------------- */
+function renderLogosRow(program, size){
+  if(!program.logos || !program.logos.length){
+    return `<div class="seal" style="${size?`width:${size}px;height:${size}px;`:''}"><span class="init">${esc((program.name||"ب").trim()[0]||"ب")}</span></div>`;
+  }
+  return `<div class="logos-row">${program.logos.map(l=>`<div class="seal" style="${size?`width:${size}px;height:${size}px;`:''}"><img src="${l}"></div>`).join("")}</div>`;
+}
+
+/* the single program to show on the main public screen: the one pinned in admin settings,
+   falling back to the first enabled program if that pin is missing/disabled */
+function getDisplayedProgram(){
+  const pinned = getProgram(SITE.displayedProgramId);
+  if(pinned && pinned.visibleToPublic) return pinned;
+  return PROGRAMS.find(p=>p.visibleToPublic) || null;
+}
+
 function renderPublic(){
-  if(!PROGRAMS.length){
+  const program = getDisplayedProgram();
+
+  if(!program){
     return `
       <div class="topbar">
         <div class="brand"><div class="seal"><span class="init">؟</span></div><div class="brand-text"><h1>لا توجد برامج متاحة</h1></div></div>
         <button class="link-btn" id="goAdmin">لوحة التحكم 🔒</button>
       </div>
-      <div class="card"><p class="empty">لم يتم إضافة أي برنامج/صف بعد.</p></div>`;
+      <div class="card"><p class="empty">لا يوجد حاليًا أي برنامج/صف متاح للتسجيل العام.</p></div>
+      ${renderPopupHtml()}`;
   }
-
-  // multi-program picker
-  if(!PUBLIC_PROGRAM_ID){
-    return `
-      <div class="topbar">
-        <div class="brand"><div class="seal"><span class="init">📋</span></div><div class="brand-text"><h1>اختر البرنامج / الصف</h1><p>يرجى اختيار البرنامج الذي ترغب بالتسجيل فيه</p></div></div>
-        <button class="link-btn" id="goAdmin">لوحة التحكم 🔒</button>
-      </div>
-      <div class="program-picker">
-        ${PROGRAMS.map(p=>`
-          <div class="program-card" data-id="${p.id}">
-            <h3>${esc(p.name)}</h3>
-            <p>${esc(p.description)}</p>
-          </div>`).join("")}
-      </div>`;
-  }
-
-  const program = getProgram(PUBLIC_PROGRAM_ID);
-  if(!program){ PUBLIC_PROGRAM_ID = null; return renderPublic(); }
 
   const status = regStatus(program);
-  const logoHtml = program.logo ? `<img src="${program.logo}">` : `<span class="init">${esc((program.name||"ب").trim()[0]||"ب")}</span>`;
-  const changeLink = PROGRAMS.length > 1 ? `<button class="link-btn" id="changeProgram" style="margin-inline-end:10px;">تغيير البرنامج ↺</button>` : "";
   let inner = "";
 
   if(SUBMITTED){
@@ -431,8 +540,6 @@ function renderPublic(){
         <p style="color:var(--muted);text-align:center;padding:20px 0;">التسجيل في هذا البرنامج غير متاح حاليًا. يرجى المحاولة لاحقًا.</p>
       </div>`;
   } else {
-    const ageHint = program.ageRestrict ? `
-      <div class="age-note"><span class="icon-inline">🎂</span> يسمح بالتسجيل لمواليد من ${esc(program.ageFrom||"—")} إلى ${esc(program.ageTo||"—")} فقط</div>` : "";
     inner = `
       <div class="card">
         <div class="status-banner status-open"><span class="status-dot"></span> التسجيل متاح الآن</div>
@@ -442,63 +549,7 @@ function renderPublic(){
             <input type="text" id="f_name" required placeholder="الاسم الكامل">
           </div>
 
-          ${program.fields.nationality ? `
-          <div class="field">
-            <label>الجنسية <span class="req">*</span></label>
-            <div class="search-wrap">
-              <input type="text" id="f_nat_search" placeholder="ابحث عن الجنسية..." autocomplete="off" required>
-              <input type="hidden" id="f_nat_value">
-              <div class="search-list" id="natList"></div>
-            </div>
-          </div>` : ""}
-
-          ${program.fields.idNumber ? `
-          <div class="field">
-            <label>رقم البطاقة الشخصية <span class="req">*</span></label>
-            <input type="text" id="f_idnum" required placeholder="رقم البطاقة">
-          </div>` : ""}
-
-          ${program.fields.birthdate ? `
-          <div class="row2">
-            <div class="field">
-              <label class="field-icon-label">تاريخ الميلاد <span class="req">*</span> ${program.ageRestrict ? '<span class="icon-inline" title="يوجد تحكم بعمر المشتركين">🎂</span>' : ''}</label>
-              <input type="date" id="f_dob" required>
-            </div>
-            <div class="field">
-              <label>العمر</label>
-              <input type="text" id="f_age" readonly placeholder="يُحسب تلقائيًا">
-            </div>
-          </div>
-          ${ageHint}
-          <div class="err" id="ageErr" style="display:none;">تاريخ الميلاد خارج نطاق العمر المسموح به لهذا البرنامج.</div>` : ""}
-
-          ${program.fields.studentPhone ? `
-          <div class="field">
-            <label>رقم جوال الطالب <span class="req">*</span></label>
-            <input type="tel" id="f_sphone" required placeholder="05xxxxxxxx">
-          </div>` : ""}
-
-          ${program.fields.guardianPhone ? `
-          <div class="field">
-            <label>رقم جوال ولي الأمر <span class="req">*</span></label>
-            <input type="tel" id="f_gphone" required placeholder="05xxxxxxxx">
-          </div>` : ""}
-
-          ${program.fields.disease ? `
-          <div class="field">
-            <label>هل يعاني الطالب من أي أمراض لا سمح الله؟ <span class="req">*</span></label>
-            <div class="radio-row">
-              <div class="radio-opt" data-val="لا" id="disease_no">لا</div>
-              <div class="radio-opt" data-val="نعم" id="disease_yes">نعم</div>
-            </div>
-            <input type="hidden" id="f_disease">
-            <div id="diseaseDetailWrap" style="display:none;margin-top:12px;">
-              <label>يرجى ذكر المرض</label>
-              <textarea id="f_disease_detail" rows="2" placeholder="اكتب تفاصيل المرض هنا"></textarea>
-            </div>
-          </div>` : ""}
-
-          ${program.customFields.map(cf => renderCustomFieldPublic(cf)).join("")}
+          ${program.fieldOrder.map(key => renderFieldBlockPublic(program, key)).join("")}
 
           <button type="submit" class="btn">إرسال البيانات ✉️</button>
         </form>
@@ -507,18 +558,111 @@ function renderPublic(){
 
   return `
     ${program.poster ? `<img class="poster-img" src="${program.poster}" alt="بوستر ${esc(program.name)}">` : ""}
+    ${(status.open && program.regEnd) ? `<div class="countdown-banner" id="closeCountdown">⏳ جارِ حساب الوقت المتبقي...</div>` : ""}
     <div class="topbar">
       <div class="brand">
-        <div class="seal">${logoHtml}</div>
+        ${renderLogosRow(program)}
         <div class="brand-text">
+          ${program.orgName ? `<div class="org-name">${esc(program.orgName)}</div>` : ""}
           <h1>${esc(program.name)}</h1>
           <p>${esc(program.description)}</p>
         </div>
       </div>
-      <div>${changeLink}<button class="link-btn" id="goAdmin">لوحة التحكم 🔒</button></div>
+      <button class="link-btn" id="goAdmin">لوحة التحكم 🔒</button>
     </div>
     ${inner}
+    ${renderPopupHtml()}
   `;
+}
+
+/* renders one field "block" from a program's fieldOrder array */
+function renderFieldBlockPublic(program, key){
+  if(key === 'nationality'){
+    if(!program.fields.nationality) return "";
+    return `
+      <div class="field">
+        <label>الجنسية <span class="req">*</span></label>
+        <div class="search-wrap">
+          <input type="text" id="f_nat_search" placeholder="ابحث عن الجنسية..." autocomplete="off" required>
+          <input type="hidden" id="f_nat_value">
+          <div class="search-list" id="natList"></div>
+        </div>
+      </div>`;
+  }
+  if(key === 'idNumber'){
+    if(!program.fields.idNumber) return "";
+    return `
+      <div class="field">
+        <label>رقم البطاقة الشخصية <span class="req">*</span></label>
+        <input type="text" id="f_idnum" required placeholder="رقم البطاقة">
+      </div>`;
+  }
+  if(key === 'birthdate'){
+    if(!program.fields.birthdate) return "";
+    const ageHint = program.ageRestrict ? `
+      <div class="age-note"><span class="icon-inline">🎂</span> يسمح بالتسجيل لمواليد من ${esc(program.ageFrom||"—")} إلى ${esc(program.ageTo||"—")} فقط</div>` : "";
+    return `
+      <div class="row2">
+        <div class="field">
+          <label class="field-icon-label">تاريخ الميلاد <span class="req">*</span> ${program.ageRestrict ? '<span class="icon-inline" title="يوجد تحكم بعمر المشتركين">🎂</span>' : ''}</label>
+          <input type="date" id="f_dob" required>
+        </div>
+        <div class="field">
+          <label>العمر</label>
+          <input type="text" id="f_age" readonly placeholder="يُحسب تلقائيًا">
+        </div>
+      </div>
+      ${ageHint}
+      <div class="err" id="ageErr" style="display:none;">تاريخ الميلاد خارج نطاق العمر المسموح به لهذا البرنامج.</div>`;
+  }
+  if(key === 'phones'){
+    const s = program.fields.studentPhone, g = program.fields.guardianPhone;
+    if(!s && !g) return "";
+    return `
+      <div class="row2">
+        ${s ? `
+        <div class="field">
+          <label>رقم جوال الطالب <span class="req">*</span></label>
+          <input type="tel" id="f_sphone" required maxlength="8" inputmode="numeric" placeholder="8 أرقام">
+        </div>` : ""}
+        ${g ? `
+        <div class="field">
+          <label>رقم جوال ولي الأمر <span class="req">*</span></label>
+          <input type="tel" id="f_gphone" required maxlength="8" inputmode="numeric" placeholder="8 أرقام">
+        </div>` : ""}
+      </div>`;
+  }
+  if(key === 'disease'){
+    if(!program.fields.disease) return "";
+    return `
+      <div class="field">
+        <label>هل يعاني الطالب من أي أمراض لا سمح الله؟ <span class="req">*</span></label>
+        <div class="radio-row">
+          <div class="radio-opt" data-val="لا" id="disease_no">لا</div>
+          <div class="radio-opt" data-val="نعم" id="disease_yes">نعم</div>
+        </div>
+        <input type="hidden" id="f_disease">
+        <div id="diseaseDetailWrap" style="display:none;margin-top:12px;">
+          <label>يرجى ذكر المرض</label>
+          <textarea id="f_disease_detail" rows="2" placeholder="اكتب تفاصيل المرض هنا"></textarea>
+        </div>
+      </div>`;
+  }
+  // otherwise it's a custom field id
+  const cf = program.customFields.find(c=>c.id===key);
+  return cf ? renderCustomFieldPublic(cf) : "";
+}
+
+function renderPopupHtml(){
+  if(!SITE.popupEnabled || !SITE.popupMessage || POPUP_DISMISSED) return "";
+  return `
+    <div class="popup-overlay" id="publicPopupOverlay">
+      <div class="popup-box">
+        <div class="popup-x" id="popupCloseX">✕</div>
+        <p>${esc(SITE.popupMessage)}</p>
+        <button class="btn" id="popupCtaBtn" style="width:auto;padding:10px 26px;">${esc(SITE.popupButtonText||"متابعة")}</button>
+      </div>
+    </div>`;
 }
 
 function renderCustomFieldPublic(cf){
@@ -536,22 +680,54 @@ function renderCustomFieldPublic(cf){
   return `<div class="field"><label>${esc(cf.label)}</label><input type="text" id="cf_${cf.id}"></div>`;
 }
 
+function startCountdown(program){
+  if(countdownTimer){ clearInterval(countdownTimer); countdownTimer = null; }
+  const el = document.getElementById('closeCountdown');
+  if(!el || !program.regEnd) return;
+  const end = new Date(program.regEnd);
+  const tick = ()=>{
+    const diff = end - new Date();
+    if(diff <= 0){
+      if(countdownTimer){ clearInterval(countdownTimer); countdownTimer = null; }
+      render(); // registration just closed — re-render to show the closed state
+      return;
+    }
+    const d = Math.floor(diff/86400000);
+    const h = Math.floor((diff%86400000)/3600000);
+    const m = Math.floor((diff%3600000)/60000);
+    const s = Math.floor((diff%60000)/1000);
+    const parts = [];
+    if(d) parts.push(d+" يوم");
+    if(d || h) parts.push(h+" ساعة");
+    if(d || h || m) parts.push(m+" دقيقة");
+    if(!d && !h) parts.push(s+" ثانية");
+    el.textContent = "⏳ يتبقى على إغلاق التسجيل: " + parts.join(" و ");
+  };
+  tick();
+  countdownTimer = setInterval(tick, 1000);
+}
+
 function attachPublicEvents(){
   const goAdmin = document.getElementById('goAdmin');
   if(goAdmin) goAdmin.onclick = ()=>{ VIEW="adminLogin"; render(); };
 
-  document.querySelectorAll('.program-card').forEach(el=>{
-    el.onclick = ()=>{ PUBLIC_PROGRAM_ID = el.dataset.id; render(); };
-  });
-
-  const changeProgram = document.getElementById('changeProgram');
-  if(changeProgram) changeProgram.onclick = ()=>{ PUBLIC_PROGRAM_ID = null; SUBMITTED=false; render(); };
-
   const backBtn = document.getElementById('backBtn');
   if(backBtn) backBtn.onclick = ()=>{ SUBMITTED=false; render(); };
 
-  const program = getProgram(PUBLIC_PROGRAM_ID);
-  if(!program) return;
+  // public announcement popup
+  const popupX = document.getElementById('popupCloseX');
+  if(popupX) popupX.onclick = ()=>{ POPUP_DISMISSED = true; render(); };
+  const popupCta = document.getElementById('popupCtaBtn');
+  if(popupCta) popupCta.onclick = ()=>{
+    const url = (SITE.popupLinkUrl||"").trim();
+    if(url) window.location.href = url; // navigates the visitor away from the site
+    else { POPUP_DISMISSED = true; render(); }
+  };
+
+  const program = getDisplayedProgram();
+  if(!program){ if(countdownTimer){ clearInterval(countdownTimer); countdownTimer=null; } return; }
+  startCountdown(program);
+  if(!program.visibleToPublic) return;
 
   // nationality search
   const natSearch = document.getElementById('f_nat_search');
@@ -601,6 +777,12 @@ function attachPublicEvents(){
     setVal("لا");
   }
 
+  // student / guardian phone numbers: digits only, exactly 8 digits
+  ['f_sphone','f_gphone'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('input', ()=>{ el.value = el.value.replace(/\D/g,'').slice(0,8); });
+  });
+
   // custom yes/no fields
   document.querySelectorAll('.cf-opt').forEach(el=>{
     el.onclick = ()=>{
@@ -628,6 +810,13 @@ function attachPublicEvents(){
           alert("عذرًا، تاريخ الميلاد المدخل خارج نطاق العمر المسموح به لهذا البرنامج.");
           return;
         }
+      }
+      // phone numbers must be exactly 8 digits
+      if(program.fields.studentPhone && !/^\d{8}$/.test(document.getElementById('f_sphone').value.trim())){
+        alert("رقم جوال الطالب يجب أن يتكون من 8 أرقام فقط"); return;
+      }
+      if(program.fields.guardianPhone && !/^\d{8}$/.test(document.getElementById('f_gphone').value.trim())){
+        alert("رقم جوال ولي الأمر يجب أن يتكون من 8 أرقام فقط"); return;
       }
       SAVING = true;
       const submitBtn = form.querySelector('button[type=submit]');
@@ -715,6 +904,7 @@ function renderAdmin(){
     ['schedule','مواعيد التسجيل'],
     ['fields','الأسئلة وعمر المشتركين'],
     ['message','رسالة الشكر'],
+    ['announcement','الرسالة المنبثقة'],
     ['responses','الاستجابات'],
     ['users','المستخدمون'],
   ];
@@ -727,10 +917,11 @@ function renderAdmin(){
   return `
     <div class="topbar">
       <div class="brand">
-        <div class="seal">${selProgram && selProgram.logo ? `<img src="${selProgram.logo}">` : `<span class="init">إ</span>`}</div>
+        ${selProgram ? renderLogosRow(selProgram, 56) : `<div class="seal"><span class="init">إ</span></div>`}
         <div class="brand-text"><h1>لوحة التحكم</h1><p>${esc(CURRENT_USER.username)}${CURRENT_USER.isOwner ? ' — مالك' : ''}</p></div>
       </div>
       <div>
+        <button class="icon-btn" id="globalRefreshBtn" title="تحديث البيانات من القاعدة">🔄</button>
         <button class="link-btn" id="goPublic">عرض صفحة التسجيل ↗</button>
         <button class="link-btn" id="logoutBtn">تسجيل الخروج</button>
       </div>
@@ -753,34 +944,68 @@ function renderAdminTab(){
   /* ---- Programs / classes management ---- */
   if(ADMIN_TAB==='programs'){
     const editing = getProgram(EDIT_PROGRAM_ID) || PROGRAMS[0];
+    const displayed = getDisplayedProgram();
     return `
     <div class="card">
+      <div class="section-title">🖥️ البرنامج المعروض في الشاشة الرئيسية</div>
+      <div class="field">
+        <label>يظهر هذا البرنامج فقط لزوار صفحة التسجيل العامة</label>
+        <select id="displayedProgramSelect">
+          ${PROGRAMS.map(p=>`<option value="${p.id}" ${p.id===(displayed?displayed.id:'')?'selected':''} ${!p.visibleToPublic?'disabled':''}>${esc(p.name)}${!p.visibleToPublic?' (معطّل)':''}</option>`).join("")}
+        </select>
+        <p class="muted-note">يمكن اختيار برنامج مفعّل فقط. لتغيير البرامج التي تظهر في هذه القائمة، فعّل أو عطّل البرنامج من صف البرنامج أدناه.</p>
+      </div>
+    </div>
+    <div class="card">
       <div class="section-title">البرامج / الصفوف</div>
-      ${PROGRAMS.map(p=>`
-        <div class="program-item ${p.id===EDIT_PROGRAM_ID?'active':''}" data-id="${p.id}">
-          <span class="pname">${esc(p.name)}</span>
-          <span style="display:flex;gap:6px;">
+      <div class="row-header">
+        <span>اسم البرنامج</span><span>الحالة</span><span>مواعيد التسجيل</span><span></span>
+      </div>
+      ${PROGRAMS.map(p=>{
+        const st = regStatus(p);
+        const isDisplayed = displayed && displayed.id===p.id;
+        return `
+        <div class="program-row ${p.id===EDIT_PROGRAM_ID?'active':''}" data-id="${p.id}">
+          <div>
+            <div class="col-label">اسم البرنامج</div>
+            <div class="pname">${esc(p.name)} ${isDisplayed ? '<span class="badge badge-owner">معروض حاليًا 🖥️</span>' : ''}</div>
+            <div class="pmeta">${p.orgName ? esc(p.orgName)+' · ' : ''}${p.visibleToPublic ? 'مفعّل ✅' : 'معطّل 🚫'}</div>
+          </div>
+          <div>
+            <div class="col-label">الحالة</div>
+            <span class="badge ${st.open?'badge-owner':'badge-off'}" style="${st.open?'background:#e7f4ec;color:#1f7a4a;':''}">${st.open?'مفتوح':'مغلق'}</span>
+          </div>
+          <div>
+            <div class="col-label">مواعيد التسجيل</div>
+            <div class="pmeta">${p.regStart? 'من '+fmtDT(new Date(p.regStart)) : 'بدون بداية'}<br>${p.regEnd? 'إلى '+fmtDT(new Date(p.regEnd)) : 'بدون نهاية'}</div>
+          </div>
+          <div class="pactions">
             <button class="btn small ghost editProgramBtn" data-id="${p.id}">تحرير</button>
             ${PROGRAMS.length>1 ? `<button class="btn small danger delProgramBtn" data-id="${p.id}">حذف</button>` : ""}
-          </span>
-        </div>`).join("")}
-      <div class="row2" style="margin-top:16px;">
-        <div class="field"><label>اسم البرنامج/الصف الجديد</label><input type="text" id="newProgramName" placeholder="مثال: صف مواليد 2013-2017"></div>
-        <div class="field" style="display:flex;align-items:flex-end;"><button class="btn secondary" id="addProgramBtn" style="width:100%;">➕ إضافة برنامج / صف</button></div>
+          </div>
+        </div>`;
+      }).join("")}
+      <div class="field" style="margin-top:16px;">
+        <label>اسم البرنامج/الصف الجديد</label>
+        <input type="text" id="newProgramName" placeholder="مثال: صف مواهب مواليد 2013-2017">
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn secondary" id="addProgramBtn" style="flex:1;">➕ إضافة برنامج / صف</button>
+        <button class="icon-btn" id="refreshProgramsBtn" title="تحديث القائمة">🔄</button>
       </div>
     </div>
     ${editing ? `
     <div class="card">
       <div class="section-title">تحرير: ${esc(editing.name)}</div>
+      <div class="field"><label>اسم الجهة المنظمة</label><input type="text" id="cfgOrg" value="${esc(editing.orgName)}" placeholder="مثال: أكاديمية المواهب"></div>
       <div class="field"><label>اسم البرنامج</label><input type="text" id="cfgName" value="${esc(editing.name)}"></div>
       <div class="field"><label>وصف البرنامج</label><textarea id="cfgDesc" rows="3">${esc(editing.description)}</textarea></div>
       <div class="field">
-        <label>شعار البرنامج</label>
-        <div class="logo-upload">
-          <div class="seal" style="width:64px;height:64px;">${editing.logo ? `<img src="${editing.logo}">` : `<span class="init">؟</span>`}</div>
-          <label class="file-btn">اختيار صورة<input type="file" id="logoInput" accept="image/*" style="display:none;"></label>
-          ${editing.logo ? `<button class="btn danger small" id="removeLogo">إزالة</button>` : ""}
+        <label>شعارات البرنامج (يمكن إضافة أكثر من شعار)</label>
+        <div class="logos-row" style="margin-bottom:10px;">
+          ${editing.logos.map((l,i)=>`<div class="seal"><img src="${l}"><span class="rm-logo removeLogoBtn" data-idx="${i}">✕</span></div>`).join("")}
         </div>
+        <label class="file-btn">➕ إضافة شعار<input type="file" id="logoInput" accept="image/*" style="display:none;"></label>
       </div>
       <div class="field">
         <label>صورة البوستر (تظهر أعلى صفحة التسجيل)</label>
@@ -790,6 +1015,11 @@ function renderAdminTab(){
           ${editing.poster ? `<button class="btn danger small" id="removePoster">إزالة</button>` : ""}
         </div>
       </div>
+      <div class="toggle-row">
+        <span class="flabel">تفعيل / تعطيل هذا البرنامج</span>
+        <label class="switch"><input type="checkbox" id="cfgVisible" ${editing.visibleToPublic?'checked':''}><span class="slider"></span></label>
+      </div>
+      <p class="muted-note" style="margin-bottom:14px;">عند التعطيل، لا يظهر هذا البرنامج في صفحة التسجيل العامة، ولا يمكن اختياره كبرنامج معروض.</p>
       <button class="btn" id="saveProgram">حفظ التغييرات</button>
     </div>` : ""}`;
   }
@@ -800,7 +1030,7 @@ function renderAdminTab(){
     return `
     <div class="card">
       <div class="section-title">مواعيد فتح وإغلاق التسجيل — ${esc(program.name)}</div>
-      <div class="status-banner ${status.open?'status-open':'status-closed'}"><span class="status-dot"></span> ${status.open? "التسجيل مفتوح حاليًا" : (status.reason + (status.when? " — "+status.when : ""))}</div>
+      <div class="status-banner ${status.open?'status-open':'status-closed'}"><span class="status-dot"></span> ${status.open? ("التسجيل مفتوح حاليًا" + (status.closesAt ? ` — يُغلق في ${status.closesAt}` : "")) : (status.reason + (status.when? " — "+status.when : ""))}</div>
       <div class="row2">
         <div class="field"><label>يبدأ التسجيل من</label><input type="datetime-local" id="cfgStart" value="${program.regStart||""}"></div>
         <div class="field"><label>ينتهي التسجيل في</label><input type="datetime-local" id="cfgEnd" value="${program.regEnd||""}"></div>
@@ -825,6 +1055,23 @@ function renderAdminTab(){
           <span class="flabel">${stdLabels[k]}</span>
           <label class="switch"><input type="checkbox" class="fieldToggle" data-field="${k}" ${program.fields[k]?'checked':''}><span class="slider"></span></label>
         </div>`).join("")}
+    </div>
+    <div class="card">
+      <div class="section-title">🔀 ترتيب ظهور الأسئلة في نموذج التسجيل</div>
+      ${program.fieldOrder.map((key, idx)=>{
+        const label = ORDER_LABELS[key] || (program.customFields.find(cf=>cf.id===key)||{}).label || key;
+        return `
+        <div class="order-item">
+          <div class="oi-info"><b>${esc(label)}</b></div>
+          <div class="order-btns">
+            <button class="icon-btn orderFirstBtn" data-idx="${idx}" ${idx===0?'disabled':''} title="نقل إلى الأول">⏮</button>
+            <button class="icon-btn orderUpBtn" data-idx="${idx}" ${idx===0?'disabled':''} title="تحريك للأعلى">▲</button>
+            <button class="icon-btn orderDownBtn" data-idx="${idx}" ${idx===program.fieldOrder.length-1?'disabled':''} title="تحريك للأسفل">▼</button>
+            <button class="icon-btn orderLastBtn" data-idx="${idx}" ${idx===program.fieldOrder.length-1?'disabled':''} title="نقل إلى الأخير">⏭</button>
+          </div>
+        </div>`;
+      }).join("")}
+      <p class="muted-note">"الاسم" يظهر دائمًا أولًا، ويظهر ترتيب هذه الأسئلة بعده كما هو محدد هنا.</p>
     </div>
     <div class="card">
       <div class="section-title"><span class="icon-inline">🎂</span> التحكم بعمر المشتركين</div>
@@ -872,6 +1119,26 @@ function renderAdminTab(){
         <p class="hint">استخدم <code>{{program}}</code> ليتم استبدالها تلقائيًا باسم البرنامج.</p>
       </div>
       <button class="btn" id="saveMsg">حفظ الرسالة</button>
+    </div>`;
+
+  /* ---- Public announcement popup ---- */
+  if(ADMIN_TAB==='announcement') return `
+    <div class="card">
+      <div class="section-title">📢 الرسالة المنبثقة للجمهور</div>
+      <div class="toggle-row">
+        <span class="flabel">تفعيل الرسالة المنبثقة</span>
+        <label class="switch"><input type="checkbox" id="popupEnabledToggle" ${SITE.popupEnabled?'checked':''}><span class="slider"></span></label>
+      </div>
+      <div class="field" style="margin-top:14px;">
+        <label>نص الرسالة</label>
+        <textarea id="popupMsg" rows="3" placeholder="مثال: تابعونا على حساباتنا لمعرفة آخر الأخبار">${esc(SITE.popupMessage)}</textarea>
+      </div>
+      <div class="row2">
+        <div class="field"><label>نص الزر</label><input type="text" id="popupBtnText" value="${esc(SITE.popupButtonText)}" placeholder="متابعة"></div>
+        <div class="field"><label>الرابط الذي ينتقل إليه الزائر عند الضغط</label><input type="text" id="popupUrl" value="${esc(SITE.popupLinkUrl)}" placeholder="https://..."></div>
+      </div>
+      <p class="muted-note">عند ضغط الزائر على الزر سيتم توجيهه إلى هذا الرابط ومغادرة الموقع الحالي. تُعرض هذه الرسالة على صفحة التسجيل العامة فقط عند التفعيل.</p>
+      <button class="btn" id="savePopup">حفظ الرسالة المنبثقة</button>
     </div>`;
 
   /* ---- Responses ---- */
@@ -938,6 +1205,18 @@ function attachAdminEvents(){
     ADMIN_PROGRAM_ID = progSelect.value; // changing the program also refreshes the responses title/table
     render();
   };
+  const refreshBtn = document.getElementById('globalRefreshBtn');
+  if(refreshBtn) refreshBtn.onclick = async ()=>{
+    PROGRAMS = (await sget('programs', PROGRAMS)).map(normalizeProgram);
+    USERS = await sget('users', USERS);
+    SITE = await sget('site-settings', SITE) || defaultSite();
+    render();
+    toast("تم تحديث البيانات 🔄");
+  };
+  // once-per-day auto backup, only attempted for users who can actually read responses
+  if(CURRENT_USER && (CURRENT_USER.isOwner || CURRENT_USER.permissions.responses)){
+    maybeAutoBackup().catch(()=>{});
+  }
   bindAdminTabEvents();
 }
 
@@ -955,6 +1234,13 @@ function bindAdminTabEvents(){
   const program = getProgram(ADMIN_PROGRAM_ID) || PROGRAMS[0];
 
   if(ADMIN_TAB==='programs'){
+    const displaySelect = document.getElementById('displayedProgramSelect');
+    if(displaySelect) displaySelect.onchange = async ()=>{
+      SITE.displayedProgramId = displaySelect.value;
+      await sset('site-settings', SITE);
+      refreshAdminTab();
+      toast("تم تحديد البرنامج المعروض في الشاشة الرئيسية ✓");
+    };
     document.querySelectorAll('.editProgramBtn').forEach(btn=>{
       btn.onclick = ()=>{ EDIT_PROGRAM_ID = btn.dataset.id; refreshAdminTab(); };
     });
@@ -980,17 +1266,24 @@ function bindAdminTabEvents(){
       render();
       toast("تمت إضافة البرنامج/الصف ✓");
     };
+    const refreshProgramsBtn = document.getElementById('refreshProgramsBtn');
+    if(refreshProgramsBtn) refreshProgramsBtn.onclick = async ()=>{
+      PROGRAMS = (await sget('programs', PROGRAMS)).map(normalizeProgram);
+      render();
+      toast("تم تحديث قائمة البرامج 🔄");
+    };
     const editing = getProgram(EDIT_PROGRAM_ID) || PROGRAMS[0];
     if(editing){
       const logoInput = document.getElementById('logoInput');
       if(logoInput) logoInput.addEventListener('change', (e)=>{
         const file = e.target.files[0]; if(!file) return;
         const reader = new FileReader();
-        reader.onload = ()=>{ editing.logo = reader.result; sset('programs', PROGRAMS).then(()=>{ refreshAdminTab(); toast("تم تحديث الشعار"); }); };
+        reader.onload = ()=>{ editing.logos.push(reader.result); sset('programs', PROGRAMS).then(()=>{ refreshAdminTab(); toast("تمت إضافة الشعار"); }); };
         reader.readAsDataURL(file);
       });
-      const rm = document.getElementById('removeLogo');
-      if(rm) rm.onclick = ()=>{ editing.logo=""; sset('programs', PROGRAMS).then(refreshAdminTab); };
+      document.querySelectorAll('.removeLogoBtn').forEach(btn=>{
+        btn.onclick = ()=>{ editing.logos.splice(parseInt(btn.dataset.idx,10),1); sset('programs', PROGRAMS).then(refreshAdminTab); };
+      });
 
       const posterInput = document.getElementById('posterInput');
       if(posterInput) posterInput.addEventListener('change', (e)=>{
@@ -1004,8 +1297,10 @@ function bindAdminTabEvents(){
 
       const saveBtn = document.getElementById('saveProgram');
       if(saveBtn) saveBtn.onclick = async ()=>{
+        editing.orgName = document.getElementById('cfgOrg').value.trim();
         editing.name = document.getElementById('cfgName').value.trim() || editing.name;
         editing.description = document.getElementById('cfgDesc').value.trim();
+        editing.visibleToPublic = document.getElementById('cfgVisible').checked;
         await sset('programs', PROGRAMS);
         render();
         toast("تم الحفظ بنجاح ✓");
@@ -1027,6 +1322,46 @@ function bindAdminTabEvents(){
     document.querySelectorAll('.fieldToggle').forEach(cb=>{
       cb.onchange = async ()=>{ program.fields[cb.dataset.field] = cb.checked; await sset('programs', PROGRAMS); toast("تم التحديث ✓"); };
     });
+    document.querySelectorAll('.orderFirstBtn').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const i = parseInt(btn.dataset.idx,10);
+        if(i<=0) return;
+        const [item] = program.fieldOrder.splice(i,1);
+        program.fieldOrder.unshift(item);
+        await sset('programs', PROGRAMS);
+        refreshAdminTab();
+        toast("تم نقل السؤال إلى الأول ✓");
+      };
+    });
+    document.querySelectorAll('.orderUpBtn').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const i = parseInt(btn.dataset.idx,10);
+        if(i<=0) return;
+        [program.fieldOrder[i-1], program.fieldOrder[i]] = [program.fieldOrder[i], program.fieldOrder[i-1]];
+        await sset('programs', PROGRAMS);
+        refreshAdminTab();
+      };
+    });
+    document.querySelectorAll('.orderDownBtn').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const i = parseInt(btn.dataset.idx,10);
+        if(i>=program.fieldOrder.length-1) return;
+        [program.fieldOrder[i+1], program.fieldOrder[i]] = [program.fieldOrder[i], program.fieldOrder[i+1]];
+        await sset('programs', PROGRAMS);
+        refreshAdminTab();
+      };
+    });
+    document.querySelectorAll('.orderLastBtn').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const i = parseInt(btn.dataset.idx,10);
+        if(i>=program.fieldOrder.length-1) return;
+        const [item] = program.fieldOrder.splice(i,1);
+        program.fieldOrder.push(item);
+        await sset('programs', PROGRAMS);
+        refreshAdminTab();
+        toast("تم نقل السؤال إلى الأخير ✓");
+      };
+    });
     const ageToggle = document.getElementById('ageRestrictToggle');
     if(ageToggle) ageToggle.onchange = ()=>{
       document.getElementById('ageFrom').disabled = !ageToggle.checked;
@@ -1044,7 +1379,9 @@ function bindAdminTabEvents(){
       const label = document.getElementById('newQLabel').value.trim();
       const type = document.getElementById('newQType').value;
       if(!label){ alert("يرجى كتابة نص السؤال"); return; }
-      program.customFields.push({id: newId('q'), label, type});
+      const cf = {id: newId('q'), label, type};
+      program.customFields.push(cf);
+      program.fieldOrder.push(cf.id);
       await sset('programs', PROGRAMS);
       refreshAdminTab();
       toast("تمت إضافة السؤال ✓");
@@ -1052,6 +1389,7 @@ function bindAdminTabEvents(){
     document.querySelectorAll('.removeQ').forEach(btn=>{
       btn.onclick = async ()=>{
         program.customFields = program.customFields.filter(cf=>cf.id!==btn.dataset.id);
+        program.fieldOrder = program.fieldOrder.filter(k=>k!==btn.dataset.id);
         await sset('programs', PROGRAMS);
         refreshAdminTab();
       };
@@ -1063,6 +1401,17 @@ function bindAdminTabEvents(){
       program.thankYouMessage = document.getElementById('cfgMsg').value.trim() || defaultProgram().thankYouMessage;
       await sset('programs', PROGRAMS);
       toast("تم حفظ الرسالة ✓");
+    };
+  }
+
+  if(ADMIN_TAB==='announcement'){
+    document.getElementById('savePopup').onclick = async ()=>{
+      SITE.popupEnabled = document.getElementById('popupEnabledToggle').checked;
+      SITE.popupMessage = document.getElementById('popupMsg').value.trim();
+      SITE.popupButtonText = document.getElementById('popupBtnText').value.trim() || "متابعة";
+      SITE.popupLinkUrl = document.getElementById('popupUrl').value.trim();
+      await sset('site-settings', SITE);
+      toast("تم حفظ الرسالة المنبثقة ✓");
     };
   }
 
@@ -1140,7 +1489,10 @@ async function loadResponses(){
         <b style="font-family:'Cairo';color:var(--navy);font-size:16px;">استجابات: ${esc(program.name)}</b><br>
         <b style="font-family:'Cairo';color:var(--navy);">${responses.length}</b> <span style="color:var(--muted);font-size:13.5px;">طالبًا مسجّلاً</span>
       </div>
-      <button class="btn secondary small" id="exportBtn">تصدير إلى إكسل 📊</button>
+      <div style="display:flex;gap:8px;">
+        <button class="icon-btn" id="refreshResponsesBtn" title="مسح وتحديث">🧹🔄</button>
+        <button class="btn secondary small" id="exportBtn">تصدير إلى إكسل 📊</button>
+      </div>
     </div>
     <div class="table-wrap">
       <table>
@@ -1152,6 +1504,7 @@ async function loadResponses(){
     </div>`;
 
   document.getElementById('exportBtn').onclick = ()=> exportExcel(responses, cols, program);
+  document.getElementById('refreshResponsesBtn').onclick = ()=>{ area.innerHTML = `<div class="card"><p class="empty">جارِ تحميل الاستجابات...</p></div>`; loadResponses(); };
 }
 
 function fmtCell(v, key){
@@ -1171,6 +1524,30 @@ function exportExcel(responses, cols, program){
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "الاستجابات");
   XLSX.writeFile(wb, `تسجيلات_${((program&&program.name)||'البرنامج').replace(/\s+/g,'_')}.xlsx`);
+}
+
+/* builds one workbook with a sheet per program — used for the once-a-day auto backup */
+function exportBackupWorkbook(allResponses, filename){
+  const wb = XLSX.utils.book_new();
+  PROGRAMS.forEach(program=>{
+    const responses = allResponses.filter(r=> r.programId === program.id);
+    if(!responses.length) return;
+    const cols = [['name','الاسم']];
+    if(program.fields.nationality) cols.push(['nationality','الجنسية']);
+    if(program.fields.idNumber) cols.push(['idNumber','رقم البطاقة']);
+    if(program.fields.birthdate){ cols.push(['birthdate','تاريخ الميلاد']); cols.push(['age','العمر']); }
+    if(program.fields.studentPhone) cols.push(['studentPhone','جوال الطالب']);
+    if(program.fields.guardianPhone) cols.push(['guardianPhone','جوال ولي الأمر']);
+    if(program.fields.disease){ cols.push(['disease','يعاني من مرض']); cols.push(['diseaseDetail','تفاصيل المرض']); }
+    program.customFields.forEach(cf=> cols.push(['custom__'+cf.id, cf.label]));
+    cols.push(['submittedAt','تاريخ التسجيل']);
+    const header = cols.map(c=>c[1]);
+    const rows = responses.map(r=> cols.map(c=> fmtCell(r[c[0]], c[0])));
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+    ws['!cols'] = cols.map(c=> ({wch: Math.max(14, c[1].length+4)}));
+    XLSX.utils.book_append_sheet(wb, ws, (program.name||'برنامج').slice(0,28).replace(/[\\/*?\[\]:]/g,'_'));
+  });
+  if(wb.SheetNames.length) XLSX.writeFile(wb, filename);
 }
 
 init();
